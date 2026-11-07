@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any, Iterable, cast
 from typing_extensions import TypeVar, TypeGuard, assert_never
 
@@ -23,6 +22,7 @@ from ...types.chat import (
     ParsedChatCompletionMessage,
     ChatCompletionToolUnionParam,
     ChatCompletionFunctionToolParam,
+    ChatCompletionMessageCustomToolCall,
     completion_create_params,
 )
 from ..._exceptions import LengthFinishReasonError, ContentFilterFinishReasonError
@@ -36,8 +36,6 @@ ResponseFormatT = TypeVar(
     default=None,
 )
 _default_response_format: None = None
-
-log: logging.Logger = logging.getLogger("openai.lib.parsing")
 
 
 def is_strict_chat_completion_tool_param(
@@ -114,7 +112,7 @@ def parse_chat_completion(
 
         message = choice.message
 
-        tool_calls: list[ParsedFunctionToolCall] = []
+        tool_calls: list[ParsedFunctionToolCall | ChatCompletionMessageCustomToolCall] = []
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 if tool_call.type == "function":
@@ -134,13 +132,7 @@ def parse_chat_completion(
                         )
                     )
                 elif tool_call.type == "custom":
-                    # warn user that custom tool calls are not callable here
-                    log.warning(
-                        "Custom tool calls are not callable. Ignoring tool call: %s - %s",
-                        tool_call.id,
-                        tool_call.custom.name,
-                        stacklevel=2,
-                    )
+                    tool_calls.append(tool_call)
                 elif TYPE_CHECKING:
                     assert_never(tool_call)
                 else:
